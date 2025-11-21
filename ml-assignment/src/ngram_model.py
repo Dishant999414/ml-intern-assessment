@@ -1,13 +1,30 @@
 import random
+import re
+from collections import defaultdict, Counter
+
 
 class TrigramModel:
     def __init__(self):
         """
         Initializes the TrigramModel.
         """
-        # TODO: Initialize any data structures you need to store the n-gram counts.
-       
-        pass
+        # Stores trigram counts: (w1, w2) → Counter(w3)
+        self.trigram_counts = defaultdict(Counter)
+
+        # Vocabulary of words (for safety in generation)
+        self.vocab = set()
+
+        # To store list of all words for simple token lookup
+        self.tokens = []
+
+    def _clean_and_tokenize(self, text):
+        """
+        Lowercase + remove punctuations + split tokens
+        """
+        text = text.lower()
+        text = re.sub(r"[^a-zA-Z0-9\s]", "", text)
+        tokens = text.split()
+        return tokens
 
     def fit(self, text):
         """
@@ -16,27 +33,53 @@ class TrigramModel:
         Args:
             text (str): The text to train the model on.
         """
-        # TODO: Implement the training logic.
-        # This will involve:
-        # 1. Cleaning the text (e.g., converting to lowercase, removing punctuation).
-        # 2. Tokenizing the text into words.
-        # 3. Padding the text with start and end tokens.
-        # 4. Counting the trigrams.
-        pass
+        tokens = self._clean_and_tokenize(text)
+        self.tokens = tokens
+
+        # Add start and end padding
+        padded = ["<s>", "<s>"] + tokens + ["</s>"]
+
+        # Build trigram counts
+        for i in range(len(padded) - 2):
+            w1, w2, w3 = padded[i], padded[i+1], padded[i+2]
+            self.trigram_counts[(w1, w2)][w3] += 1
+            self.vocab.add(w3)
+
+    def _get_next_word(self, w1, w2):
+        """
+        Randomly chooses next word based on trigram counts.
+        """
+        possible = self.trigram_counts.get((w1, w2), None)
+
+        if not possible:
+            # fallback if context not found
+            return random.choice(list(self.vocab))
+
+        # Weighted random choice
+        words = list(possible.keys())
+        weights = list(possible.values())
+        return random.choices(words, weights=weights, k=1)[0]
 
     def generate(self, max_length=50):
         """
         Generates new text using the trained trigram model.
 
         Args:
-            max_length (int): The maximum length of the generated text.
+            max_length (int): Maximum words in output
 
         Returns:
-            str: The generated text.
+            str: Generated text.
         """
-        # TODO: Implement the generation logic.
-        # This will involve:
-        # 1. Starting with the start tokens.
-        # 2. Probabilistically choosing the next word based on the current context.
-        # 3. Repeating until the end token is generated or the maximum length is reached.
-        pass
+        w1, w2 = "<s>", "<s>"
+        output = []
+
+        for _ in range(max_length):
+            w3 = self._get_next_word(w1, w2)
+
+            if w3 == "</s>":
+                break
+
+            output.append(w3)
+            w1, w2 = w2, w3
+
+        return " ".join(output)
